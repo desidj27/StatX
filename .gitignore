@@ -1,0 +1,16 @@
+node_modules/
+web/node_modules/
+.env
+.env.*
+!.env.example
+web/.env
+web/.env.*
+!web/.env.example
+stats.sqlite
+stats.sqlite-wal
+stats.sqlite-shm
+.next/
+web/.next/
+*.log
+.DS_Store
+

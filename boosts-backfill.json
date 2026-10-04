@@ -1,0 +1,23 @@
+{
+  "guild_id": "890999276367409202",
+  "boosts": [
+    {
+      "note": "Kitkat — Jun 2, 2026 12:15 AM (Discord: Yesterday at 12:15 AM)",
+      "user_id": "PASTE_KITKAT_USER_ID",
+      "year": 2026,
+      "month": 6,
+      "day": 2,
+      "hour": 0,
+      "minute": 15
+    },
+    {
+      "note": "Hotdogdawg — May 31, 2026 1:20 AM",
+      "user_id": "PASTE_HOTDOGDawG_USER_ID",
+      "year": 2026,
+      "month": 5,
+      "day": 31,
+      "hour": 1,
+      "minute": 20
+    }
+  ]
+}

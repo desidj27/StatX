@@ -1,0 +1,31 @@
+{
+  "name": "discord-stats-bot",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "migrate:mongo": "node scripts/migrate-sqlite-to-mongo.js",
+    "migrate:mongo:force": "node scripts/migrate-sqlite-to-mongo.js --force",
+    "wipe:data": "node scripts/wipe-all-data.js --confirm",
+    "log:boost": "node scripts/log-boost-manual.js",
+    "list:boosts": "node scripts/list-boosts.js",
+    "delete:boost": "node scripts/delete-boost.js",
+    "backfill:boosts": "node scripts/backfill-boosts.js",
+    "find:member": "node scripts/find-member-id.js",
+    "merge:mongo": "node scripts/merge-sqlite-into-mongo.js",
+    "verify:mongo": "node scripts/verify-mongo-data.js",
+    "audit:mongo": "node scripts/audit-user-daily-days.js",
+    "recover:sqlite": "node scripts/recover-sqlite-wal.js",
+    "inspect:user": "node scripts/inspect-user-stats.js",
+    "dev:web": "npm run dev --prefix web",
+    "build:web": "npm run build --prefix web"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^0.1.67",
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.5",
+    "mongodb": "^6.21.0",
+    "sqlite3": "^5.1.7"
+  }
+}

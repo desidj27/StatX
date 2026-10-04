@@ -1,0 +1,23 @@
+{
+  "name": "discord-bot-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@heroui/react": "^3.1.0",
+    "@heroui/styles": "^3.1.0",
+    "@tailwindcss/postcss": "^4.3.0",
+    "iron-session": "^8.0.4",
+    "mongodb": "^6.21.0",
+    "next": "^15.5.19",
+    "postcss": "^8.5.15",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "tailwind-variants": "^3.2.2",
+    "tailwindcss": "^4.3.0"
+  }
+}

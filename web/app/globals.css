@@ -1,0 +1,355 @@
+@import "tailwindcss";
+@import "@heroui/styles";
+
+/* StatTrack brand — dark theme with orange / red / yellow */
+@layer base {
+  .dark,
+  [data-theme="dark"] {
+    color-scheme: dark;
+
+    /* Warm charcoal base */
+    --background: oklch(0.12 0.018 35);
+    --foreground: oklch(0.96 0.01 85);
+
+    --surface: oklch(0.17 0.022 38);
+    --surface-foreground: var(--foreground);
+    --surface-secondary: oklch(0.2 0.024 40);
+    --surface-tertiary: oklch(0.23 0.026 42);
+
+    --overlay: oklch(0.19 0.022 38);
+    --overlay-foreground: var(--foreground);
+
+    --muted: oklch(0.68 0.03 55);
+    --default: oklch(0.24 0.02 40);
+    --default-foreground: var(--foreground);
+
+    /* Brand palette */
+    --accent: oklch(0.72 0.19 45);
+    --accent-foreground: oklch(0.14 0.02 40);
+
+    --danger: oklch(0.62 0.24 27);
+    --danger-foreground: oklch(0.98 0.01 85);
+
+    --warning: oklch(0.84 0.16 88);
+    --warning-foreground: oklch(0.18 0.03 45);
+
+    --success: oklch(0.7 0.14 145);
+    --success-foreground: oklch(0.14 0.02 40);
+
+    --border: oklch(0.28 0.03 42);
+    --separator: oklch(0.25 0.028 40);
+    --focus: var(--accent);
+    --link: oklch(0.78 0.16 55);
+
+    --field-background: oklch(0.15 0.02 38);
+    --field-foreground: var(--foreground);
+    --field-border: oklch(0.3 0.03 42);
+
+    --segment: oklch(0.22 0.025 40);
+    --segment-foreground: var(--foreground);
+
+  }
+}
+
+@layer utilities {
+  .brand-gradient {
+    background: linear-gradient(
+      135deg,
+      oklch(0.72 0.19 45) 0%,
+      oklch(0.62 0.24 27) 55%,
+      oklch(0.84 0.16 88) 100%
+    );
+  }
+
+  .brand-gradient-text {
+    background: linear-gradient(
+      90deg,
+      oklch(0.78 0.18 50),
+      oklch(0.72 0.19 45),
+      oklch(0.84 0.16 88)
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .landing-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.45;
+  }
+
+  .landing-orb-a {
+    top: -8rem;
+    left: -6rem;
+    width: 22rem;
+    height: 22rem;
+    background: oklch(0.62 0.24 27 / 0.35);
+  }
+
+  .landing-orb-b {
+    top: 12rem;
+    right: -8rem;
+    width: 26rem;
+    height: 26rem;
+    background: oklch(0.72 0.19 45 / 0.3);
+  }
+
+  .landing-orb-c {
+    bottom: 4rem;
+    left: 30%;
+    width: 18rem;
+    height: 18rem;
+    background: oklch(0.84 0.16 88 / 0.2);
+  }
+
+  .landing-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(oklch(0.28 0.03 42 / 0.35) 1px, transparent 1px),
+      linear-gradient(90deg, oklch(0.28 0.03 42 / 0.35) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, black, transparent);
+  }
+
+  .landing-preview-glow {
+    position: absolute;
+    inset: -1rem;
+    border-radius: 1.5rem;
+    background: linear-gradient(
+      135deg,
+      oklch(0.72 0.19 45 / 0.25),
+      oklch(0.62 0.24 27 / 0.15)
+    );
+    filter: blur(24px);
+  }
+
+  /* Activity tracker / rankings */
+  .tracker-brand-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: oklch(0.68 0.03 55);
+  }
+
+  .tracker-title {
+    margin-top: 0.25rem;
+    font-size: 1.75rem;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+  }
+
+  .tracker-subtitle {
+    margin-top: 0.35rem;
+    font-size: 0.9rem;
+    color: oklch(0.68 0.03 55);
+  }
+
+  .records-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-radius: 9999px;
+    border: 1px solid oklch(0.28 0.03 42);
+    background: oklch(0.17 0.022 38);
+    padding: 0.4rem 0.85rem;
+    font-size: 0.8rem;
+    color: oklch(0.68 0.03 55);
+  }
+
+  .tracker-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    border-bottom: 1px solid oklch(0.28 0.03 42);
+    padding-bottom: 0.75rem;
+  }
+
+  .tracker-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    border-radius: 0.5rem;
+    border: 1px solid transparent;
+    padding: 0.45rem 0.7rem;
+    font-size: 0.8rem;
+    color: oklch(0.68 0.03 55);
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+  }
+
+  .tracker-tab-active {
+    border-color: oklch(0.35 0.04 42);
+    background: oklch(0.2 0.024 40);
+    color: var(--foreground);
+  }
+
+  .tracker-tab-disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
+  .period-pill {
+    border-radius: 9999px;
+    border: 1px solid oklch(0.28 0.03 42);
+    background: oklch(0.17 0.022 38);
+    padding: 0.35rem 0.85rem;
+    font-size: 0.8rem;
+    color: oklch(0.68 0.03 55);
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+  }
+
+  .period-pill-active {
+    border-color: oklch(0.72 0.19 45 / 0.55);
+    background: oklch(0.72 0.19 45 / 0.12);
+    color: var(--foreground);
+  }
+
+  .period-pill-disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
+
+  .rank-column {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-radius: 0.75rem;
+    border: 1px solid oklch(0.28 0.03 42);
+    background: oklch(0.15 0.02 38);
+  }
+
+  .rank-column-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-bottom: 1px solid oklch(0.28 0.03 42);
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+
+  .rank-column-body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0.5rem;
+  }
+
+  .rank-column-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-top: 1px solid oklch(0.28 0.03 42);
+    padding: 0.55rem 0.75rem;
+    font-size: 0.75rem;
+    color: oklch(0.68 0.03 55);
+  }
+
+  .rank-pager-btn {
+    display: flex;
+    height: 1.65rem;
+    width: 1.65rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.35rem;
+    border: 1px solid oklch(0.28 0.03 42);
+    background: oklch(0.2 0.024 40);
+    font-size: 1rem;
+    line-height: 1;
+    color: oklch(0.68 0.03 55);
+  }
+
+  .rank-pager-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.35;
+  }
+
+  .rank-pager-btn:not(:disabled):hover {
+    border-color: oklch(0.35 0.04 42);
+    color: var(--foreground);
+  }
+
+  .rank-row {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    border-radius: 0.65rem;
+    border: 1px solid transparent;
+    padding: 0.45rem 0.55rem;
+  }
+
+  .rank-row-gold {
+    border-color: oklch(0.72 0.19 45 / 0.25);
+    background: oklch(0.72 0.19 45 / 0.08);
+  }
+
+  .rank-row-silver {
+    border-color: oklch(0.55 0.03 280 / 0.2);
+    background: oklch(0.55 0.03 280 / 0.06);
+  }
+
+  .rank-row-bronze {
+    border-color: oklch(0.55 0.08 55 / 0.2);
+    background: oklch(0.55 0.08 55 / 0.06);
+  }
+
+  .rank-medal {
+    display: flex;
+    height: 1.65rem;
+    width: 1.65rem;
+    shrink: 0;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    font-size: 0.7rem;
+    font-weight: 700;
+  }
+
+  .rank-medal-gold {
+    background: linear-gradient(135deg, oklch(0.78 0.16 75), oklch(0.72 0.19 45));
+    color: oklch(0.18 0.03 45);
+  }
+
+  .rank-medal-silver {
+    background: linear-gradient(135deg, oklch(0.75 0.02 280), oklch(0.55 0.03 280));
+    color: oklch(0.2 0.02 280);
+  }
+
+  .rank-medal-bronze {
+    background: linear-gradient(135deg, oklch(0.68 0.1 55), oklch(0.52 0.09 45));
+    color: oklch(0.2 0.03 45);
+  }
+
+  .rank-plain {
+    width: 1.65rem;
+    shrink: 0;
+    text-align: center;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: oklch(0.68 0.03 55);
+  }
+
+  .rank-value {
+    color: oklch(0.72 0.14 295);
+  }
+
+  .game-icon {
+    height: 2.5rem;
+    width: 2.5rem;
+    border-radius: 0.5rem;
+    border: 1px solid oklch(0.28 0.03 42);
+    background: oklch(0.17 0.022 38);
+    padding: 0.35rem;
+    object-fit: contain;
+  }
+}
+
+html,
+body {
+  min-height: 100%;
+}
