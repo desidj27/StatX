@@ -14,28 +14,26 @@ export const sessionOptions = {
   },
 };
 
+function emptySession() {
+  return {
+    user: undefined,
+    accessToken: undefined,
+    guildIds: undefined,
+    save: async () => {},
+    destroy: async () => {},
+    updateConfig: () => {},
+  };
+}
+
 export async function getSession() {
   const cookieStore = await cookies();
-
-  // Drop legacy cookie that can crash SSR after SESSION_SECRET / schema changes
-  try {
-    if (cookieStore.get("bot_dashboard_session")) {
-      cookieStore.delete("bot_dashboard_session");
-    }
-  } catch {
-    // ignore — delete may be unavailable in some render contexts
-  }
 
   try {
     return await getIronSession(cookieStore, sessionOptions);
   } catch (err) {
-    console.error("session decrypt failed, resetting cookie:", err?.message || err);
-    try {
-      cookieStore.delete(COOKIE_NAME);
-    } catch {
-      // ignore
-    }
-    // Fresh empty session
-    return getIronSession(cookieStore, sessionOptions);
+    console.error("session decrypt failed:", err?.message || err);
+    // Cookie clears only work reliably in Route Handlers / Server Actions.
+    // Returning an empty session keeps SSR from crashing on corrupt cookies.
+    return emptySession();
   }
 }

@@ -3,13 +3,10 @@ import { getSession } from "@/lib/session.js";
 import { discordOAuthUrl } from "@/lib/discord.js";
 import LandingPage from "@/components/LandingPage.js";
 
+export const dynamic = "force-dynamic";
+
 export default async function HomePage({ searchParams }) {
-  let session = null;
-  try {
-    session = await getSession();
-  } catch (err) {
-    console.error("home session error:", err);
-  }
+  const session = await getSession();
   if (session?.user) redirect("/dashboard");
 
   const params = await searchParams;
