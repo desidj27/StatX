@@ -1,5 +1,6 @@
 import {
   ActionRowBuilder,
+  AttachmentBuilder,
   ButtonBuilder,
   ButtonStyle,
   EmbedBuilder,
@@ -7,6 +8,7 @@ import {
   SlashCommandBuilder,
 } from "discord.js";
 import { DB } from "./db.js";
+import { renderRouletteSpinGif } from "./render_roulette.js";
 
 export const FEATURE_DISABLED =
   "Economy is disabled for this server. An admin can enable it in the dashboard.";
@@ -137,12 +139,11 @@ export async function handleRoulette(interaction) {
 
   if ((await ensureBettable(interaction, bet)) == null) return;
 
+  await interaction.deferReply();
+
   const ok = await DB.trySubtractBalance(interaction.guildId, interaction.user.id, bet);
   if (!ok) {
-    await interaction.reply({
-      content: "Bet failed. Try again.",
-      flags: MessageFlags.Ephemeral,
-    });
+    await interaction.editReply({ content: "Bet failed. Try again." });
     return;
   }
 
@@ -175,6 +176,14 @@ export async function handleRoulette(interaction) {
     balance = updated.balance;
   }
 
+  let files = [];
+  try {
+    const gif = renderRouletteSpinGif(pocket);
+    files = [new AttachmentBuilder(gif, { name: "roulette.gif" })];
+  } catch (err) {
+    console.error("roulette gif render failed:", err);
+  }
+
   const embed = new EmbedBuilder()
     .setTitle("Roulette")
     .setColor(color === "red" ? 0xe74c3c : color === "black" ? 0x2b2d31 : 0x2ecc71)
@@ -187,7 +196,11 @@ export async function handleRoulette(interaction) {
       ].join("\n")
     );
 
-  await interaction.reply({ embeds: [embed] });
+  if (files.length) {
+    embed.setImage("attachment://roulette.gif");
+  }
+
+  await interaction.editReply({ embeds: [embed], files });
 }
 
 function rpsWinner(a, b) {
