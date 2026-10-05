@@ -1,5 +1,21 @@
-import { createCanvas, loadImage } from "@napi-rs/canvas";
+import { createCanvas, loadImage, GlobalFonts } from "@napi-rs/canvas";
 import https from "https";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const FONTS_DIR = path.join(__dirname, "..", "assets", "fonts");
+const QUOTE_FONT = "StatXSans";
+
+let fontsReady = false;
+function ensureQuoteFonts() {
+  if (fontsReady) return;
+  // Bundle Inter so quote images don't fall back to a serif on Linux hosts.
+  GlobalFonts.registerFromPath(path.join(FONTS_DIR, "Inter-Regular.ttf"), QUOTE_FONT);
+  GlobalFonts.registerFromPath(path.join(FONTS_DIR, "Inter-Medium.ttf"), QUOTE_FONT);
+  GlobalFonts.registerFromPath(path.join(FONTS_DIR, "Inter-SemiBold.ttf"), QUOTE_FONT);
+  fontsReady = true;
+}
 
 function fetchImageBuffer(url) {
   return new Promise((resolve, reject) => {
@@ -117,6 +133,8 @@ function formatTimestamp(ts) {
  * This matches your previous look closely.
  */
 export async function renderQuoteImage({ message }) {
+  ensureQuoteFonts();
+
   const content = message?.content ?? "";
   const author = message?.author;
   const member = message?.member;
@@ -155,9 +173,9 @@ export async function renderQuoteImage({ message }) {
   const avatarY = paddingY;
 
   const baseFontSize = 16;
-  const usernameFont = `600 ${baseFontSize + 4}px "gg sans"`;
-  const timeFont = `500 ${baseFontSize - 0}px "gg sans"`;
-  const messageFont = `400 ${baseFontSize + 2}px "gg sans"`;
+  const usernameFont = `600 ${baseFontSize + 4}px "${QUOTE_FONT}", sans-serif`;
+  const timeFont = `500 ${baseFontSize - 0}px "${QUOTE_FONT}", sans-serif`;
+  const messageFont = `400 ${baseFontSize + 2}px "${QUOTE_FONT}", sans-serif`;
   const lineHeight = baseFontSize + 6;
 
   const nameX = avatarX + avatarSize + 14;
