@@ -8,7 +8,7 @@ import {
   SlashCommandBuilder,
 } from "discord.js";
 import { DB } from "./db.js";
-import { renderRouletteSpinGif } from "./render_roulette.js";
+import { renderRouletteSpinGif, renderRouletteStillPng } from "./render_roulette.js";
 
 export const FEATURE_DISABLED =
   "Economy is disabled for this server. An admin can enable it in the dashboard.";
@@ -178,16 +178,16 @@ export async function handleRoulette(interaction) {
 
   let files = [];
   try {
-    const gif = await renderRouletteSpinGif(pocket);
-    if (gif) {
-      files = [new AttachmentBuilder(gif, { name: "roulette.gif" })];
-    } else {
-      const { renderRouletteStillPng } = await import("./render_roulette.js");
+    const gif = renderRouletteSpinGif(pocket);
+    files = [new AttachmentBuilder(gif, { name: "roulette.gif" })];
+  } catch (err) {
+    console.error("roulette gif render failed:", err);
+    try {
       const png = renderRouletteStillPng(pocket);
       files = [new AttachmentBuilder(png, { name: "roulette.png" })];
+    } catch (err2) {
+      console.error("roulette still render failed:", err2);
     }
-  } catch (err) {
-    console.error("roulette image render failed:", err);
   }
 
   const embed = new EmbedBuilder()
@@ -203,8 +203,7 @@ export async function handleRoulette(interaction) {
     );
 
   if (files.length) {
-    const name = files[0].name;
-    embed.setImage(`attachment://${name}`);
+    embed.setImage(`attachment://${files[0].name}`);
   }
 
   await interaction.editReply({ embeds: [embed], files });

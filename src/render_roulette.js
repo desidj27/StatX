@@ -1,4 +1,5 @@
 import { createCanvas } from "@napi-rs/canvas";
+import { GIFEncoder, quantize, applyPalette } from "./vendor/gifenc.esm.js";
 
 /** European single-zero wheel order (clockwise). */
 export const EUROPEAN_WHEEL = [
@@ -139,24 +140,7 @@ function drawFrame(size, rotation, pocketIndex, progress, revealLabel) {
   return { canvas, imageData: ctx.getImageData(0, 0, size, size) };
 }
 
-async function loadGifenc() {
-  try {
-    const mod = await import("gifenc");
-    const gifenc = mod.default ?? mod;
-    return {
-      GIFEncoder: gifenc.GIFEncoder,
-      quantize: gifenc.quantize,
-      applyPalette: gifenc.applyPalette,
-    };
-  } catch (err) {
-    console.warn(
-      "[roulette] gifenc not installed — spinning GIF disabled. Add `gifenc` to Bisect Additional Node packages (or run npm install)."
-    );
-    return null;
-  }
-}
-
-/** Still PNG of the wheel stopped on `pocket` (fallback when gifenc is missing). */
+/** Still PNG of the wheel stopped on `pocket` (fallback). */
 export function renderRouletteStillPng(pocket, { size = 360 } = {}) {
   const pocketIndex = EUROPEAN_WHEEL.indexOf(pocket);
   if (pocketIndex < 0) throw new Error(`invalid pocket: ${pocket}`);
@@ -169,14 +153,9 @@ export function renderRouletteStillPng(pocket, { size = 360 } = {}) {
 
 /**
  * Build an animated roulette GIF that eases out onto `pocket` (0–36).
- * Returns null if gifenc is unavailable.
- * @returns {Promise<Buffer|null>}
+ * @returns {Buffer}
  */
-export async function renderRouletteSpinGif(pocket, { size = 360, frames = 32 } = {}) {
-  const gifenc = await loadGifenc();
-  if (!gifenc) return null;
-
-  const { GIFEncoder, quantize, applyPalette } = gifenc;
+export function renderRouletteSpinGif(pocket, { size = 360, frames = 32 } = {}) {
   const pocketIndex = EUROPEAN_WHEEL.indexOf(pocket);
   if (pocketIndex < 0) throw new Error(`invalid pocket: ${pocket}`);
 
