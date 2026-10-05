@@ -99,30 +99,57 @@ export async function resolveActivityIconUrl(applicationId, activityName) {
   });
 }
 
+const profileCache = new Map();
+const PROFILE_TTL_MS = 10 * 60_000;
+
+function getCachedProfile(guildId, userId) {
+  const hit = profileCache.get(`${guildId}:${userId}`);
+  if (!hit) return null;
+  if (Date.now() > hit.expiresAt) {
+    profileCache.delete(`${guildId}:${userId}`);
+    return null;
+  }
+  return hit.value;
+}
+
+function setCachedProfile(guildId, userId, value) {
+  profileCache.set(`${guildId}:${userId}`, {
+    value,
+    expiresAt: Date.now() + PROFILE_TTL_MS,
+  });
+  return value;
+}
+
 export async function resolveMemberProfiles(guildId, userIds) {
   const unique = [...new Set(userIds.filter(Boolean))];
   const profiles = {};
 
   await Promise.all(
     unique.map(async (userId) => {
+      const cached = getCachedProfile(guildId, userId);
+      if (cached) {
+        profiles[userId] = cached;
+        return;
+      }
+
       const member = await fetchGuildMember(guildId, userId);
       if (!member?.user) {
-        profiles[userId] = {
+        profiles[userId] = setCachedProfile(guildId, userId, {
           user_id: userId,
           display_name: `User ${userId.slice(-4)}`,
           username: userId,
           avatar_url: defaultAvatarUrl(userId),
-        };
+        });
         return;
       }
 
       const user = member.user;
-      profiles[userId] = {
+      profiles[userId] = setCachedProfile(guildId, userId, {
         user_id: userId,
         display_name: member.nick ?? user.global_name ?? user.username,
         username: user.username,
         avatar_url: memberAvatarUrl(userId, user.avatar),
-      };
+      });
     })
   );
 
@@ -167,8 +194,11 @@ export async function botIsInGuild(guildId) {
   const token = process.env.DISCORD_TOKEN;
   if (!token) return false;
 
-  const res = await fetch(`${DISCORD_API}/guilds/${guildId}`, {
-    headers: { Authorization: `Bot ${token}` },
+  const { cacheGetOrSet } = await import("./cache.js");
+  return cacheGetOrSet(`bot:${guildId}`, 5 * 60_000, async () => {
+    const res = await fetch(`${DISCORD_API}/guilds/${guildId}`, {
+      headers: { Authorization: `Bot ${token}` },
+    });
+    return res.ok;
   });
-  return res.ok;
 }

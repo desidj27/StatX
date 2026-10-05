@@ -1,5 +1,9 @@
 import { getSession } from "./session.js";
 import { botIsInGuild, fetchUserGuilds, isGuildAdmin } from "./discord.js";
+import { cacheGetOrSet } from "./cache.js";
+
+const GUILDS_TTL_MS = 60_000;
+const BOT_IN_GUILD_TTL_MS = 5 * 60_000;
 
 function toAdminGuildSummary(guild) {
   return { id: guild.id, name: guild.name, icon: guild.icon };
@@ -11,9 +15,15 @@ function persistAdminGuildIds(session, adminGuilds) {
   delete session.adminGuilds;
 }
 
+async function loadAdminGuilds(accessToken) {
+  return cacheGetOrSet(`guilds:${accessToken}`, GUILDS_TTL_MS, async () => {
+    const guilds = await fetchUserGuilds(accessToken);
+    return guilds.filter(isGuildAdmin).map(toAdminGuildSummary);
+  });
+}
+
 export async function getSessionGuilds(session, { persist = false } = {}) {
-  const guilds = await fetchUserGuilds(session.accessToken);
-  const adminGuilds = guilds.filter(isGuildAdmin).map(toAdminGuildSummary);
+  const adminGuilds = await loadAdminGuilds(session.accessToken);
 
   if (persist) {
     persistAdminGuildIds(session, adminGuilds);
@@ -35,43 +45,44 @@ export async function requireUser() {
   return { session };
 }
 
-export async function requireGuildAdmin(guildId) {
+export async function requireGuildAdmin(guildId, { checkBot = true } = {}) {
   const auth = await requireUser();
   if (auth.error) return auth;
 
-  let guild = null;
+  let isAdmin = sessionHasGuildAdmin(auth.session, guildId);
+  let guildName = "Server";
 
-  if (!sessionHasGuildAdmin(auth.session, guildId)) {
+  if (!isAdmin) {
     try {
       const guilds = await getSessionGuilds(auth.session, { persist: true });
-      guild = guilds.find((g) => g.id === guildId);
+      const match = guilds.find((g) => g.id === guildId);
+      if (!match) return { error: "forbidden", status: 403 };
+      isAdmin = true;
+      guildName = match.name;
     } catch (err) {
       console.error("Guild auth error:", err);
       return { error: "relogin_required", status: 401 };
     }
-  } else {
-    // IDs-only session: resolve name/icon from Discord when needed
+  }
+
+  if (checkBot) {
     try {
-      const guilds = await getSessionGuilds(auth.session, { persist: false });
-      guild = guilds.find((g) => g.id === guildId) ?? { id: guildId, name: "Server" };
-    } catch {
-      guild = { id: guildId, name: "Server" };
+      const botPresent = await cacheGetOrSet(
+        `bot:${guildId}`,
+        BOT_IN_GUILD_TTL_MS,
+        () => botIsInGuild(guildId)
+      );
+      if (!botPresent) {
+        return { error: "bot_not_in_guild", status: 404 };
+      }
+    } catch (err) {
+      console.error("Bot guild check error:", err);
+      return { error: "discord_api_error", status: 502 };
     }
   }
 
-  if (!guild) {
-    return { error: "forbidden", status: 403 };
-  }
-
-  try {
-    const botPresent = await botIsInGuild(guildId);
-    if (!botPresent) {
-      return { error: "bot_not_in_guild", status: 404 };
-    }
-  } catch (err) {
-    console.error("Bot guild check error:", err);
-    return { error: "discord_api_error", status: 502 };
-  }
-
-  return { session: auth.session, guild };
+  return {
+    session: auth.session,
+    guild: { id: guildId, name: guildName },
+  };
 }

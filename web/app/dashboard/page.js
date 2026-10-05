@@ -9,15 +9,18 @@ export default async function DashboardPage() {
   const session = await getSession();
   if (!session.user) redirect("/");
 
-  const adminGuilds = await getSessionGuilds(session);
+  const adminGuilds = await getSessionGuilds(session, { persist: true });
 
-  const manageable = [];
-  for (const guild of adminGuilds) {
-    if (await botIsInGuild(guild.id)) {
-      manageable.push(guild);
-    }
-  }
-  manageable.sort((a, b) => a.name.localeCompare(b.name));
+  const presence = await Promise.all(
+    adminGuilds.map(async (guild) => ({
+      guild,
+      present: await botIsInGuild(guild.id),
+    }))
+  );
+  const manageable = presence
+    .filter((row) => row.present)
+    .map((row) => row.guild)
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   const clientId = process.env.DISCORD_CLIENT_ID;
   const inviteUrl = clientId
