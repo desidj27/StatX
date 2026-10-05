@@ -272,34 +272,44 @@ async function registerCommands(applicationId, discordClient) {
     banCommand.toJSON(),
   ];
 
-  let targetGuildId = null;
-  if (guildId && discordClient.guilds.cache.has(guildId)) {
-    targetGuildId = guildId;
-  } else if (guildId) {
-    console.warn(
-      `GUILD_ID=${guildId} is set but this bot is not in that server — skipping guild commands for that ID.`
-    );
-  }
+  // Instant propagation: register to every guild the bot is currently in.
+  const guildIds = new Set(discordClient.guilds.cache.keys());
+  if (guildId) guildIds.add(guildId);
 
-  if (targetGuildId) {
+  let guildOk = 0;
+  for (const id of guildIds) {
+    if (!discordClient.guilds.cache.has(id)) {
+      console.warn(`Skipping command register for unknown guild ${id}`);
+      continue;
+    }
     try {
-      await rest.put(
-        Routes.applicationGuildCommands(applicationId, targetGuildId),
-        { body: commands }
-      );
-      console.log(
-        `Registered GUILD commands for app ${applicationId} guild ${targetGuildId}`
-      );
-      return;
+      await rest.put(Routes.applicationGuildCommands(applicationId, id), {
+        body: commands,
+      });
+      guildOk += 1;
+      console.log(`Registered GUILD commands for ${id}`);
     } catch (err) {
       console.warn(
-        `Guild command registration failed (${err?.code ?? err?.message}); trying GLOBAL...`
+        `Guild command registration failed for ${id}:`,
+        err?.code ?? err?.message ?? err
       );
     }
   }
 
-  await rest.put(Routes.applicationCommands(applicationId), { body: commands });
-  console.log(`Registered GLOBAL commands for app ${applicationId}`);
+  // Also publish GLOBAL so new servers get commands (can take up to ~1h to appear).
+  try {
+    await rest.put(Routes.applicationCommands(applicationId), { body: commands });
+    console.log(`Registered GLOBAL commands for app ${applicationId}`);
+  } catch (err) {
+    console.warn(
+      "Global command registration failed:",
+      err?.code ?? err?.message ?? err
+    );
+  }
+
+  console.log(
+    `Command register done: ${guildOk} guild(s), ${commands.length} commands (includes baltop, roulette, rps, econstats)`
+  );
 }
 
 // ---------------- MESSAGE TRACKING (STATS) ----------------
