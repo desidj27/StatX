@@ -407,6 +407,189 @@ export async function getGuildRankings(
   };
 }
 
+const BOARD_PAGE_SIZE = 25;
+
+function dayBoundsMs(startDay, endDay) {
+  const startMs = Date.parse(`${startDay}T00:00:00.000Z`);
+  const endMs = Date.parse(`${endDay}T23:59:59.999Z`);
+  return { startMs, endMs };
+}
+
+function pageMeta(total, page, pageSize) {
+  return {
+    page,
+    pageSize,
+    total,
+    totalPages: Math.max(1, Math.ceil(total / pageSize)),
+  };
+}
+
+/** Tabular boards under Activity Tracker (everything except leaderboards). */
+export async function getGuildBoard(
+  guild_id,
+  board,
+  { startDay, endDay, page = 0, pageSize = BOARD_PAGE_SIZE } = {}
+) {
+  const db = await getDb();
+  const skip = page * pageSize;
+  const dayFilter = dayRangeMatch(guild_id, startDay, endDay);
+  const { startMs, endMs } = dayBoundsMs(startDay, endDay);
+
+  if (board === "user-daily") {
+    const filter = dayFilter;
+    const [total, items] = await Promise.all([
+      db.collection("user_daily").countDocuments(filter),
+      db
+        .collection("user_daily")
+        .find(filter)
+        .sort({ day: -1, messages: -1 })
+        .skip(skip)
+        .limit(pageSize)
+        .project({ _id: 0, user_id: 1, day: 1, messages: 1, voice_seconds: 1 })
+        .toArray(),
+    ]);
+    return { board, columns: ["day", "user", "messages", "voice"], items, ...pageMeta(total, page, pageSize) };
+  }
+
+  if (board === "channel-daily") {
+    const filter = dayFilter;
+    const [total, items] = await Promise.all([
+      db.collection("channel_daily").countDocuments(filter),
+      db
+        .collection("channel_daily")
+        .find(filter)
+        .sort({ day: -1, messages: -1 })
+        .skip(skip)
+        .limit(pageSize)
+        .project({ _id: 0, channel_id: 1, day: 1, messages: 1, voice_seconds: 1 })
+        .toArray(),
+    ]);
+    return { board, columns: ["day", "channel", "messages", "voice"], items, ...pageMeta(total, page, pageSize) };
+  }
+
+  if (board === "games") {
+    const match = {
+      guild_id,
+      day: { $gte: startDay, $lte: endDay, $regex: CALENDAR_DAY_RE },
+    };
+    const [countRow] = await db
+      .collection("activity_daily")
+      .aggregate([
+        { $match: match },
+        { $group: { _id: { activity_name: "$activity_name", user_id: "$user_id" } } },
+        { $count: "count" },
+      ])
+      .toArray();
+    const total = Number(countRow?.count ?? 0);
+    const items = await db
+      .collection("activity_daily")
+      .aggregate([
+        { $match: match },
+        {
+          $group: {
+            _id: { activity_name: "$activity_name", user_id: "$user_id" },
+            total_seconds: { $sum: "$seconds" },
+          },
+        },
+        { $sort: { total_seconds: -1 } },
+        { $skip: skip },
+        { $limit: pageSize },
+        {
+          $project: {
+            _id: 0,
+            activity_name: "$_id.activity_name",
+            user_id: "$_id.user_id",
+            total_seconds: 1,
+          },
+        },
+      ])
+      .toArray();
+    return { board, columns: ["game", "user", "play_time"], items, ...pageMeta(total, page, pageSize) };
+  }
+
+  if (board === "voice") {
+    const [total, items] = await Promise.all([
+      db.collection("voice_sessions").countDocuments({ guild_id }),
+      db
+        .collection("voice_sessions")
+        .find({ guild_id })
+        .sort({ started_at_ms: -1 })
+        .skip(skip)
+        .limit(pageSize)
+        .project({ _id: 0, user_id: 1, channel_id: 1, started_at_ms: 1 })
+        .toArray(),
+    ]);
+    return {
+      board,
+      columns: ["user", "channel", "started"],
+      items,
+      live: true,
+      ...pageMeta(total, page, pageSize),
+    };
+  }
+
+  if (board === "joins") {
+    const filter = {
+      guild_id,
+      joined_at_ms: { $gte: startMs, $lte: endMs },
+    };
+    const [total, items] = await Promise.all([
+      db.collection("member_joins").countDocuments(filter),
+      db
+        .collection("member_joins")
+        .find(filter)
+        .sort({ joined_at_ms: -1 })
+        .skip(skip)
+        .limit(pageSize)
+        .project({ _id: 0, user_id: 1, joined_at_ms: 1 })
+        .toArray(),
+    ]);
+    return { board, columns: ["user", "joined"], items, ...pageMeta(total, page, pageSize) };
+  }
+
+  if (board === "economy") {
+    const [total, items] = await Promise.all([
+      db.collection("economy_balances").countDocuments({ guild_id }),
+      db
+        .collection("economy_balances")
+        .find({ guild_id })
+        .sort({ balance: -1 })
+        .skip(skip)
+        .limit(pageSize)
+        .project({ _id: 0, user_id: 1, balance: 1, daily_streak: 1, last_daily_claim_ms: 1 })
+        .toArray(),
+    ]);
+    return {
+      board,
+      columns: ["user", "balance", "streak"],
+      items,
+      live: true,
+      ...pageMeta(total, page, pageSize),
+    };
+  }
+
+  if (board === "boosts") {
+    const filter = {
+      guild_id,
+      boosted_at_ms: { $gte: startMs, $lte: endMs },
+    };
+    const [total, items] = await Promise.all([
+      db.collection("boost_events").countDocuments(filter),
+      db
+        .collection("boost_events")
+        .find(filter)
+        .sort({ boosted_at_ms: -1 })
+        .skip(skip)
+        .limit(pageSize)
+        .project({ _id: 0, user_id: 1, boosted_at_ms: 1 })
+        .toArray(),
+    ]);
+    return { board, columns: ["user", "boosted"], items, ...pageMeta(total, page, pageSize) };
+  }
+
+  throw new Error(`unknown_board:${board}`);
+}
+
 export async function guildDailySeries(guild_id, days = 30) {
   const db = await getDb();
   const minDay = await resolveMinDay(guild_id);

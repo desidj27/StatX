@@ -202,3 +202,23 @@ export async function botIsInGuild(guildId) {
     return res.ok;
   });
 }
+
+/** Map of channel_id → { id, name, type } for a guild (cached). */
+export async function fetchGuildChannelMap(guildId) {
+  const token = process.env.DISCORD_TOKEN;
+  if (!token) return {};
+
+  const { cacheGetOrSet } = await import("./cache.js");
+  return cacheGetOrSet(`channels:${guildId}`, 5 * 60_000, async () => {
+    const res = await fetch(`${DISCORD_API}/guilds/${guildId}/channels`, {
+      headers: { Authorization: `Bot ${token}` },
+    });
+    if (!res.ok) return {};
+    const channels = await res.json();
+    const map = {};
+    for (const ch of channels) {
+      map[ch.id] = { id: ch.id, name: ch.name, type: ch.type };
+    }
+    return map;
+  });
+}
