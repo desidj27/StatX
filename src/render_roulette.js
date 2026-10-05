@@ -1,5 +1,21 @@
+// roulette-gif-v3 — uses vendored encoder at ./vendor/gifenc.esm.js (NO npm gifenc package)
 import { createCanvas } from "@napi-rs/canvas";
-import { GIFEncoder, quantize, applyPalette } from "./vendor/gifenc.esm.js";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const VENDOR_GIFENC = path.join(__dirname, "vendor", "gifenc.esm.js");
+
+if (!fs.existsSync(VENDOR_GIFENC)) {
+  throw new Error(
+    `[roulette] Missing vendored encoder at ${VENDOR_GIFENC}. Upload src/vendor/gifenc.esm.js from the StatX repo.`
+  );
+}
+
+const { GIFEncoder, quantize, applyPalette } = await import(
+  pathToFileURL(VENDOR_GIFENC).href
+);
 
 /** European single-zero wheel order (clockwise). */
 export const EUROPEAN_WHEEL = [
