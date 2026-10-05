@@ -4,8 +4,13 @@ import { discordOAuthUrl } from "@/lib/discord.js";
 import LandingPage from "@/components/LandingPage.js";
 
 export default async function HomePage({ searchParams }) {
-  const session = await getSession();
-  if (session.user) redirect("/dashboard");
+  let session = null;
+  try {
+    session = await getSession();
+  } catch (err) {
+    console.error("home session error:", err);
+  }
+  if (session?.user) redirect("/dashboard");
 
   const params = await searchParams;
   const authError = params?.error ?? null;
