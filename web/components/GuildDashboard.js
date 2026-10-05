@@ -302,6 +302,35 @@ export default function GuildDashboard({ guildId, guildName }) {
                 <Label>Daily reward base</Label>
                 <Input type="number" />
               </TextField>
+
+              <TextField
+                fullWidth
+                value={String(settings.economy.message_reward ?? 2)}
+                onChange={(v) => updateEconomy("message_reward", v)}
+              >
+                <Label>Coins per message</Label>
+                <Input type="number" />
+                <Description>Awarded after the cooldown below (0 disables)</Description>
+              </TextField>
+
+              <TextField
+                fullWidth
+                value={String(settings.economy.message_reward_cooldown_sec ?? 45)}
+                onChange={(v) => updateEconomy("message_reward_cooldown_sec", v)}
+              >
+                <Label>Message reward cooldown (seconds)</Label>
+                <Input type="number" />
+              </TextField>
+
+              <TextField
+                fullWidth
+                value={String(settings.economy.voice_reward_per_minute ?? 1)}
+                onChange={(v) => updateEconomy("voice_reward_per_minute", v)}
+              >
+                <Label>Coins per voice minute</Label>
+                <Input type="number" />
+                <Description>Granted when voice time is credited (0 disables)</Description>
+              </TextField>
             </Card.Content>
           </Card>
 

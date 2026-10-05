@@ -138,6 +138,7 @@ export const DB = (() => {
         { guild_id: 1, user_id: 1 },
         { unique: true }
       ),
+      db.collection("economy_balances").createIndex({ guild_id: 1, balance: -1 }),
       db.collection("member_joins").createIndex({ guild_id: 1, joined_at_ms: 1 }),
       db.collection("boost_events").createIndex({ guild_id: 1, boosted_at_ms: 1 }),
       db.collection("guild_settings").createIndex({ guild_id: 1 }, { unique: true }),
@@ -514,6 +515,15 @@ export const DB = (() => {
           balance: 0,
           last_daily_claim_ms: null,
           daily_streak: 0,
+          last_message_reward_ms: null,
+          biggest_bet: 0,
+          current_win_streak: 0,
+          current_loss_streak: 0,
+          longest_win_streak: 0,
+          longest_loss_streak: 0,
+          total_wagered: 0,
+          total_won: 0,
+          total_lost: 0,
         },
       },
       { upsert: true }
@@ -533,6 +543,18 @@ export const DB = (() => {
       last_daily_claim_ms:
         row.last_daily_claim_ms == null ? null : Number(row.last_daily_claim_ms),
       daily_streak: Number(row.daily_streak ?? 0),
+      last_message_reward_ms:
+        row.last_message_reward_ms == null
+          ? null
+          : Number(row.last_message_reward_ms),
+      biggest_bet: Number(row.biggest_bet ?? 0),
+      current_win_streak: Number(row.current_win_streak ?? 0),
+      current_loss_streak: Number(row.current_loss_streak ?? 0),
+      longest_win_streak: Number(row.longest_win_streak ?? 0),
+      longest_loss_streak: Number(row.longest_loss_streak ?? 0),
+      total_wagered: Number(row.total_wagered ?? 0),
+      total_won: Number(row.total_won ?? 0),
+      total_lost: Number(row.total_lost ?? 0),
     };
   }
 
@@ -583,6 +605,80 @@ export const DB = (() => {
       streak: newStreak,
       reward: rewardAmount,
     };
+  }
+
+  /** Atomic message-activity reward with cooldown. Returns true if coins were granted. */
+  async function tryClaimMessageReward(guild_id, user_id, { amount, cooldownMs, nowMs }) {
+    await ensureEconomyUser(guild_id, user_id);
+    const cutoff = nowMs - cooldownMs;
+    const res = await (
+      await col("economy_balances")
+    ).updateOne(
+      {
+        guild_id,
+        user_id,
+        $or: [
+          { last_message_reward_ms: null },
+          { last_message_reward_ms: { $exists: false } },
+          { last_message_reward_ms: { $lte: cutoff } },
+        ],
+      },
+      {
+        $inc: { balance: amount },
+        $set: { last_message_reward_ms: nowMs },
+      }
+    );
+    return res.modifiedCount > 0;
+  }
+
+  async function recordGamblingResult(guild_id, user_id, { bet, won, net = 0 }) {
+    await ensureEconomyUser(guild_id, user_id);
+    const bal = await getBalance(guild_id, user_id);
+    const patch = {
+      biggest_bet: Math.max(bal.biggest_bet, Number(bet) || 0),
+      total_wagered: bal.total_wagered + (Number(bet) || 0),
+    };
+
+    if (won === true) {
+      const winStreak = bal.current_win_streak + 1;
+      patch.current_win_streak = winStreak;
+      patch.current_loss_streak = 0;
+      patch.longest_win_streak = Math.max(bal.longest_win_streak, winStreak);
+      patch.total_won = bal.total_won + Math.max(0, Number(net) || 0);
+    } else if (won === false) {
+      const lossStreak = bal.current_loss_streak + 1;
+      patch.current_loss_streak = lossStreak;
+      patch.current_win_streak = 0;
+      patch.longest_loss_streak = Math.max(bal.longest_loss_streak, lossStreak);
+      patch.total_lost = bal.total_lost + Math.max(0, -(Number(net) || 0), Number(bet) || 0);
+    }
+    // won === null → push/tie: streaks unchanged
+
+    await (
+      await col("economy_balances")
+    ).updateOne({ guild_id, user_id }, { $set: patch });
+  }
+
+  async function listEconomyLeaderboard(guild_id, limit = 10, skip = 0) {
+    const c = await col("economy_balances");
+    const [total, items] = await Promise.all([
+      c.countDocuments({ guild_id }),
+      c
+        .find({ guild_id })
+        .sort({ balance: -1 })
+        .skip(skip)
+        .limit(limit)
+        .project({
+          _id: 0,
+          user_id: 1,
+          balance: 1,
+          biggest_bet: 1,
+          longest_win_streak: 1,
+          longest_loss_streak: 1,
+        })
+        .toArray(),
+    ]);
+    return { total, items };
   }
 
   async function upsertActivitySession({
@@ -973,6 +1069,9 @@ export const DB = (() => {
     addBalance,
     trySubtractBalance,
     applyDailyClaim,
+    tryClaimMessageReward,
+    recordGamblingResult,
+    listEconomyLeaderboard,
     upsertActivitySession,
     getActivitySession,
     deleteActivitySession,

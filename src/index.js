@@ -30,6 +30,23 @@ import { fileURLToPath } from "node:url";
 
 import { DB, mongoConnectionLabel, requireMongoEnv } from "./db.js";
 import {
+  rewardMessageActivity,
+  rewardVoiceActivity,
+} from "./economy-rewards.js";
+import {
+  rouletteCommand,
+  rpsCommand,
+  baltopCommand,
+  econstatsCommand,
+  handleRoulette,
+  handleRpsChallenge,
+  handleRpsButton,
+  handleBaltop,
+  handleEconstats,
+  ensureBettable,
+  trackBetResult,
+} from "./economy-games.js";
+import {
   logInteractionReceived,
   safeDeferReply,
   safeDeferUpdate,
@@ -246,6 +263,10 @@ async function registerCommands(applicationId, discordClient) {
     coinflipCommand.toJSON(),
     diceCommand.toJSON(),
     highlowCommand.toJSON(),
+    rouletteCommand.toJSON(),
+    rpsCommand.toJSON(),
+    baltopCommand.toJSON(),
+    econstatsCommand.toJSON(),
     helpCommand.toJSON(),
     quoteCommand.toJSON(),
     banCommand.toJSON(),
@@ -326,6 +347,8 @@ client.on("messageCreate", async (message) => {
       channel_id: message.channelId,
       day,
     });
+
+    await rewardMessageActivity(message.guildId, message.author.id, settings);
   } catch (err) {
     console.error("messageCreate error:", err);
   }
@@ -606,22 +629,6 @@ function maybeDiceAttachment(face, prefix) {
   };
 }
 
-async function ensureBettable(interaction, bet) {
-  if (bet <= 0) {
-    await interaction.reply({ content: "Bet must be at least 1.", ephemeral: true });
-    return null;
-  }
-  const bal = await DB.getBalance(interaction.guildId, interaction.user.id);
-  if (bal.balance < bet) {
-    await interaction.reply({
-      content: `You need **${bet}** coins, but you only have **${bal.balance}**.`,
-      ephemeral: true,
-    });
-    return null;
-  }
-  return bal.balance;
-}
-
 async function syncGuildActivityMeta(guild) {
   try {
     const members = await guild.members.fetch({ withPresences: true });
@@ -714,6 +721,7 @@ async function creditVoiceBetween({
 }) {
   if (!startMs || !endMs || endMs <= startMs) return;
 
+  let creditedSeconds = 0;
   let cursor = startMs;
   while (cursor < endMs) {
     const dayStart = startOfDayMsInTz(cursor);
@@ -722,6 +730,7 @@ async function creditVoiceBetween({
 
     const seconds = Math.floor((sliceEnd - cursor) / 1000);
     if (seconds > 0) {
+      creditedSeconds += seconds;
       const day = dayString(cursor);
       await DB.addUserVoice({
         guild_id: guildId,
@@ -739,6 +748,11 @@ async function creditVoiceBetween({
     }
 
     cursor = sliceEnd;
+  }
+
+  if (creditedSeconds > 0) {
+    const settings = await getGuildSettings(guildId);
+    await rewardVoiceActivity(guildId, userId, creditedSeconds, settings);
   }
 }
 
@@ -1076,9 +1090,13 @@ client.on("interactionCreate", async (interaction) => {
               "`/guildinfo` - Show info and stats for this server.",
               "`/balance` - Check your coin balance.",
               "`/daily` - Claim your daily coin reward.",
+              "`/baltop` - Economy balance leaderboard.",
+              "`/econstats` - Biggest bet, win/loss streaks, and more.",
               "`/coinflip` - Bet coins on heads or tails.",
               "`/dice` - Bet coins by guessing a 1-6 roll.",
               "`/highlow` - Bet if the next card is higher or lower.",
+              "`/roulette` - Bet on red/black/green, odd/even, or a number.",
+              "`/rps` - Challenge another player to Rock Paper Scissors.",
               "`/ban` - Ban a member (requires Ban Members).",
               "`Quote` (message command) - Post a quote image from a message.",
             ].join("\n")
@@ -1381,6 +1399,12 @@ client.on("interactionCreate", async (interaction) => {
         const result = Math.random() < 0.5 ? "heads" : "tails";
         if (result === side) {
           const updated = await DB.addBalance(interaction.guildId, interaction.user.id, bet * 2);
+          await trackBetResult(interaction.guildId, interaction.user.id, {
+            bet,
+            won: true,
+            net: bet,
+            game: "coinflip",
+          });
           await interaction.reply({
             content:
               `Coin landed **${result}**. You won **${bet}** coins.\n` +
@@ -1390,6 +1414,12 @@ client.on("interactionCreate", async (interaction) => {
         }
 
         const updated = await DB.getBalance(interaction.guildId, interaction.user.id);
+        await trackBetResult(interaction.guildId, interaction.user.id, {
+          bet,
+          won: false,
+          net: -bet,
+          game: "coinflip",
+        });
         await interaction.reply({
           content:
             `Coin landed **${result}**. You lost **${bet}** coins.\n` +
@@ -1425,6 +1455,12 @@ client.on("interactionCreate", async (interaction) => {
 
         if (roll === guess) {
           const updated = await DB.addBalance(interaction.guildId, interaction.user.id, bet * 6);
+          await trackBetResult(interaction.guildId, interaction.user.id, {
+            bet,
+            won: true,
+            net: bet * 5,
+            game: "dice",
+          });
           resultEmbed.addFields(
             { name: "Outcome", value: `Big win: **+${bet * 5}** net.` },
             { name: "Balance", value: `**${updated.balance}**` }
@@ -1437,6 +1473,12 @@ client.on("interactionCreate", async (interaction) => {
         }
 
         const updated = await DB.getBalance(interaction.guildId, interaction.user.id);
+        await trackBetResult(interaction.guildId, interaction.user.id, {
+          bet,
+          won: false,
+          net: -bet,
+          game: "dice",
+        });
         resultEmbed.addFields(
           { name: "Outcome", value: `You lost **${bet}**.` },
           { name: "Balance", value: `**${updated.balance}**` }
@@ -1507,6 +1549,46 @@ client.on("interactionCreate", async (interaction) => {
         return;
       }
 
+      if (interaction.commandName === "roulette") {
+        const settings = await getGuildSettings(interaction.guildId);
+        if (!settings.features.economy) {
+          await interaction.reply({ content: FEATURE_DISABLED, ephemeral: true });
+          return;
+        }
+        await handleRoulette(interaction);
+        return;
+      }
+
+      if (interaction.commandName === "rps") {
+        const settings = await getGuildSettings(interaction.guildId);
+        if (!settings.features.economy) {
+          await interaction.reply({ content: FEATURE_DISABLED, ephemeral: true });
+          return;
+        }
+        await handleRpsChallenge(interaction);
+        return;
+      }
+
+      if (interaction.commandName === "baltop") {
+        const settings = await getGuildSettings(interaction.guildId);
+        if (!settings.features.economy) {
+          await interaction.reply({ content: FEATURE_DISABLED, ephemeral: true });
+          return;
+        }
+        await handleBaltop(interaction);
+        return;
+      }
+
+      if (interaction.commandName === "econstats") {
+        const settings = await getGuildSettings(interaction.guildId);
+        if (!settings.features.economy) {
+          await interaction.reply({ content: FEATURE_DISABLED, ephemeral: true });
+          return;
+        }
+        await handleEconstats(interaction);
+        return;
+      }
+
       if (interaction.commandName === "ban") {
         const settings = await getGuildSettings(interaction.guildId);
         await handleBan(interaction, settings);
@@ -1516,6 +1598,11 @@ client.on("interactionCreate", async (interaction) => {
 
     // stats buttons
     if (interaction.isButton()) {
+      if (interaction.customId.startsWith("rps:")) {
+        const handled = await handleRpsButton(interaction);
+        if (handled) return;
+      }
+
       if (interaction.customId.startsWith("highlow:")) {
         const [, gameId, pick] = interaction.customId.split(":");
         const game = highlowGames.get(gameId);
@@ -1568,6 +1655,12 @@ client.on("interactionCreate", async (interaction) => {
 
         if (second === game.first) {
           const updated = await DB.addBalance(game.guildId, game.userId, game.bet);
+          await trackBetResult(game.guildId, game.userId, {
+            bet: game.bet,
+            won: null,
+            net: 0,
+            game: "highlow",
+          });
           resultEmbed.addFields(
             { name: "Outcome", value: "Tie -> push (bet returned)." },
             { name: "Balance", value: `**${updated.balance}**` }
@@ -1583,6 +1676,12 @@ client.on("interactionCreate", async (interaction) => {
         const won = pick === "higher" ? second > game.first : second < game.first;
         if (won) {
           const updated = await DB.addBalance(game.guildId, game.userId, game.bet * 2);
+          await trackBetResult(game.guildId, game.userId, {
+            bet: game.bet,
+            won: true,
+            net: game.bet,
+            game: "highlow",
+          });
           resultEmbed.addFields(
             { name: "Outcome", value: `You won **${game.bet}** coins.` },
             { name: "Balance", value: `**${updated.balance}**` }
@@ -1596,6 +1695,12 @@ client.on("interactionCreate", async (interaction) => {
         }
 
         const updated = await DB.getBalance(game.guildId, game.userId);
+        await trackBetResult(game.guildId, game.userId, {
+          bet: game.bet,
+          won: false,
+          net: -game.bet,
+          game: "highlow",
+        });
         resultEmbed.addFields(
           { name: "Outcome", value: `You lost **${game.bet}** coins.` },
           { name: "Balance", value: `**${updated.balance}**` }

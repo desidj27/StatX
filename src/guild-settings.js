@@ -31,6 +31,12 @@ export const DEFAULT_GUILD_SETTINGS = {
     daily_reward_base: 500,
     daily_streak_increment: 25,
     daily_streak_bonus_cap: 30,
+    /** Coins granted per chat message (after cooldown). */
+    message_reward: 2,
+    /** Seconds before the same user can earn message coins again. */
+    message_reward_cooldown_sec: 45,
+    /** Coins granted per full minute of voice time credited. */
+    voice_reward_per_minute: 1,
   },
   recap_state: {
     last_weekly_recap_ms: null,
