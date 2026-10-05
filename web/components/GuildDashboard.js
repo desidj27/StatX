@@ -41,13 +41,26 @@ export default function GuildDashboard({ guildId, guildName }) {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    let cancelled = false;
+    setError("");
+    setSettings(null);
+
     fetch(`/api/guilds/${guildId}/settings`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.settings) setSettings(data.settings);
-        else setError("Failed to load settings");
+      .then(async (r) => {
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          throw new Error(data.error || `Failed to load settings (${r.status})`);
+        }
+        if (!data.settings) throw new Error("Failed to load settings");
+        if (!cancelled) setSettings(data.settings);
       })
-      .catch(() => setError("Failed to load settings"));
+      .catch((err) => {
+        if (!cancelled) setError(err.message || "Failed to load settings");
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [guildId]);
 
   async function saveSettings() {
@@ -117,6 +130,17 @@ export default function GuildDashboard({ guildId, guildName }) {
   }
 
   if (!settings) {
+    if (error) {
+      return (
+        <Alert status="danger" className="mt-4">
+          <Alert.Indicator />
+          <Alert.Content>
+            <Alert.Title>Could not load settings</Alert.Title>
+            <Alert.Description>{error}</Alert.Description>
+          </Alert.Content>
+        </Alert>
+      );
+    }
     return (
       <div className="flex items-center justify-center gap-3 py-16 text-default-500">
         <Spinner size="md" />

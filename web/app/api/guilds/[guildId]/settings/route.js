@@ -14,8 +14,17 @@ export async function GET(_request, { params }) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const settings = await getGuildSettings(guildId);
-  return NextResponse.json({ settings, defaults: DEFAULT_GUILD_SETTINGS });
+  try {
+    const settings = await getGuildSettings(guildId);
+    return NextResponse.json({ settings, defaults: DEFAULT_GUILD_SETTINGS });
+  } catch (err) {
+    console.error("settings GET error:", err);
+    const msg = String(err?.message || "");
+    if (msg.includes("bad auth") || msg.includes("authentication failed")) {
+      return NextResponse.json({ error: "mongodb_auth_failed" }, { status: 500 });
+    }
+    return NextResponse.json({ error: "settings_unavailable" }, { status: 500 });
+  }
 }
 
 export async function PUT(request, { params }) {
