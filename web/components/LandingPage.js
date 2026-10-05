@@ -96,6 +96,7 @@ const PLANS = [
     period: "/mo",
     note: "Billed every month",
     highlight: false,
+    checkoutUrl: "https://buy.stripe.com/3cIdRa7wu0rc96vcmibV603",
   },
   {
     id: "quarterly",
@@ -105,6 +106,7 @@ const PLANS = [
     note: `Save ${savingsVsMonthly(13, 3)}% vs monthly`,
     highlight: true,
     badge: "Popular",
+    checkoutUrl: "https://buy.stripe.com/14AcN64kigqa3Mb862bV602",
   },
   {
     id: "yearly",
@@ -114,6 +116,7 @@ const PLANS = [
     note: `Save ${savingsVsMonthly(50, 12)}% vs monthly`,
     highlight: false,
     badge: "Best deal",
+    checkoutUrl: "https://buy.stripe.com/8x2aEYcQO8XI6Yn71YbV601",
   },
 ];
 
@@ -324,7 +327,9 @@ export default function LandingPage({ loginUrl, authError }) {
                 <Button
                   variant={plan.highlight ? "primary" : "secondary"}
                   className="mt-6 w-full font-semibold"
-                  onPress={() => scrollTo("login")}
+                  onPress={() =>
+                    window.open(plan.checkoutUrl, "_blank", "noopener,noreferrer")
+                  }
                 >
                   Choose {plan.name.toLowerCase()}
                 </Button>
@@ -333,8 +338,8 @@ export default function LandingPage({ loginUrl, authError }) {
           </div>
 
           <p className="mt-8 text-center text-sm text-muted">
-            Checkout coming soon — sign in now to configure your server. Premium can be
-            enabled by your operator in the meantime.
+            After checkout, Premium is applied to your server. Sign in below to open
+            the dashboard anytime.
           </p>
         </div>
       </section>
