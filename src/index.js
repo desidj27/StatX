@@ -1625,7 +1625,7 @@ client.on("interactionCreate", async (interaction) => {
     // Quote (message context menu)
     if (interaction.isMessageContextMenuCommand()) {
       if (interaction.commandName === "Quote") {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const settings = await getGuildSettings(interaction.guildId);
         if (!settings.features.quotes) {

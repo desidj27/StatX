@@ -1,20 +1,77 @@
 import { createCanvas, loadImage, GlobalFonts } from "@napi-rs/canvas";
 import https from "https";
+import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FONTS_DIR = path.join(__dirname, "..", "assets", "fonts");
-const QUOTE_FONT = "StatXSans";
+/** Registered family used for quote images (Discord-like sans). */
+export const QUOTE_FONT = "StatXSans";
+
+const FONT_FILES = [
+  { file: "Inter-Regular.ttf", url: "https://cdn.jsdelivr.net/fontsource/fonts/inter@5.2.5/latin-400-normal.ttf" },
+  { file: "Inter-Medium.ttf", url: "https://cdn.jsdelivr.net/fontsource/fonts/inter@5.2.5/latin-500-normal.ttf" },
+  { file: "Inter-SemiBold.ttf", url: "https://cdn.jsdelivr.net/fontsource/fonts/inter@5.2.5/latin-600-normal.ttf" },
+];
 
 let fontsReady = false;
-function ensureQuoteFonts() {
+
+function fetchBuffer(url) {
+  return new Promise((resolve, reject) => {
+    https
+      .get(url, (res) => {
+        if (res.statusCode !== 200) {
+          reject(new Error(`HTTP ${res.statusCode} for ${url}`));
+          return;
+        }
+        const chunks = [];
+        res.on("data", (c) => chunks.push(c));
+        res.on("end", () => resolve(Buffer.concat(chunks)));
+      })
+      .on("error", reject);
+  });
+}
+
+async function loadFontFile(entry) {
+  const dest = path.join(FONTS_DIR, entry.file);
+  try {
+    if (fs.existsSync(dest) && fs.statSync(dest).size > 1000) {
+      return fs.readFileSync(dest);
+    }
+  } catch {
+    // continue to download
+  }
+
+  fs.mkdirSync(FONTS_DIR, { recursive: true });
+  const buf = await fetchBuffer(entry.url);
+  fs.writeFileSync(dest, buf);
+  return buf;
+}
+
+async function ensureQuoteFonts() {
   if (fontsReady) return;
-  // Bundle Inter so quote images don't fall back to a serif on Linux hosts.
-  GlobalFonts.registerFromPath(path.join(FONTS_DIR, "Inter-Regular.ttf"), QUOTE_FONT);
-  GlobalFonts.registerFromPath(path.join(FONTS_DIR, "Inter-Medium.ttf"), QUOTE_FONT);
-  GlobalFonts.registerFromPath(path.join(FONTS_DIR, "Inter-SemiBold.ttf"), QUOTE_FONT);
-  fontsReady = true;
+
+  let registered = 0;
+  for (const entry of FONT_FILES) {
+    try {
+      const buf = await loadFontFile(entry);
+      if (GlobalFonts.register(buf, QUOTE_FONT)) registered += 1;
+    } catch (err) {
+      console.error(`[quote] font load failed (${entry.file}):`, err?.message || err);
+    }
+  }
+
+  const hasFamily = GlobalFonts.has(QUOTE_FONT);
+  console.log(
+    `[quote] fonts registered=${registered} has=${hasFamily} families=${GlobalFonts.families.length}`
+  );
+  fontsReady = hasFamily || registered > 0;
+}
+
+function quoteFontStack(weight, sizePx) {
+  // Prefer bundled Inter; never rely on Discord's proprietary "gg sans".
+  return `${weight} ${sizePx}px "${QUOTE_FONT}", "DejaVu Sans", "Liberation Sans", "Noto Sans", Arial, sans-serif`;
 }
 
 function fetchImageBuffer(url) {
@@ -90,11 +147,9 @@ function drawTokens(ctx, tokens, x, y, maxWidth, lineHeight) {
       }
 
       if (token.type === "channel" || token.type === "user") {
-        // blue pill highlight
         const pillPadX = 4;
         const pillPadY = 4;
 
-        // background pill
         ctx.fillStyle = "#5865f2";
         ctx.fillRect(
           cursorX - pillPadX / 2,
@@ -103,7 +158,6 @@ function drawTokens(ctx, tokens, x, y, maxWidth, lineHeight) {
           lineHeight
         );
 
-        // text
         ctx.fillStyle = "#ffffff";
         ctx.fillText(part, cursorX, cursorY);
 
@@ -119,21 +173,24 @@ function drawTokens(ctx, tokens, x, y, maxWidth, lineHeight) {
 
 function formatTimestamp(ts) {
   const d = new Date(ts);
-  const date = d.toLocaleDateString(undefined, {
+  const date = d.toLocaleDateString("en-US", {
     month: "numeric",
     day: "numeric",
     year: "numeric",
   });
-  const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const time = d.toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
   return `${date} ${time}`;
 }
 
 /**
- * Old-style quote renderer, but on @napi-rs/canvas (no node-canvas dependency).
- * This matches your previous look closely.
+ * Discord-style quote image. Fonts are bundled (and auto-downloaded if missing)
+ * so Linux hosts never fall back to a serif face.
  */
 export async function renderQuoteImage({ message }) {
-  ensureQuoteFonts();
+  await ensureQuoteFonts();
 
   const content = message?.content ?? "";
   const author = message?.author;
@@ -142,7 +199,6 @@ export async function renderQuoteImage({ message }) {
   const username = member?.displayName || author?.username || "Unknown";
   const timestamp = message?.createdTimestamp ?? Date.now();
 
-  // Build channel/user maps for <#id> and <@id> token rendering
   const channels = {};
   if (message?.guild?.channels?.cache) {
     for (const [id, ch] of message.guild.channels.cache) {
@@ -151,13 +207,11 @@ export async function renderQuoteImage({ message }) {
   }
 
   const users = {};
-  // Include mentioned users (best effort)
   if (message?.mentions?.users) {
     for (const [id, u] of message.mentions.users) {
       users[id] = { username: u?.username };
     }
   }
-  // Ensure author is resolvable too
   if (author?.id) users[author.id] = { username: author.username };
 
   const avatarURL =
@@ -165,7 +219,6 @@ export async function renderQuoteImage({ message }) {
     author?.avatarURL?.() ||
     null;
 
-  // Layout constants (matching old)
   const W = 800;
   const paddingY = 20;
   const avatarSize = 56;
@@ -173,15 +226,14 @@ export async function renderQuoteImage({ message }) {
   const avatarY = paddingY;
 
   const baseFontSize = 16;
-  const usernameFont = `600 ${baseFontSize + 4}px "${QUOTE_FONT}", sans-serif`;
-  const timeFont = `500 ${baseFontSize - 0}px "${QUOTE_FONT}", sans-serif`;
-  const messageFont = `400 ${baseFontSize + 2}px "${QUOTE_FONT}", sans-serif`;
+  const usernameFont = quoteFontStack(600, baseFontSize + 4);
+  const timeFont = quoteFontStack(500, baseFontSize);
+  const messageFont = quoteFontStack(400, baseFontSize + 2);
   const lineHeight = baseFontSize + 6;
 
   const nameX = avatarX + avatarSize + 14;
   const nameY = avatarY + 20;
 
-  // Measure content to compute height
   const tmp = createCanvas(W, 10);
   const tctx = tmp.getContext("2d");
   tctx.font = messageFont;
@@ -190,7 +242,6 @@ export async function renderQuoteImage({ message }) {
   const maxTextWidth = 680;
   const lines = Math.max(1, measureTokenLines(tctx, tokens, maxTextWidth));
 
-  // Dynamic height similar to old, but supports multi-line
   const headerH = 56;
   const bodyH = lines * lineHeight;
   const H = paddingY * 2 + headerH + bodyH;
@@ -198,11 +249,9 @@ export async function renderQuoteImage({ message }) {
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext("2d");
 
-  // Background (old color)
   ctx.fillStyle = "#2b2d31";
   ctx.fillRect(0, 0, W, H);
 
-  // Avatar
   if (avatarURL) {
     try {
       const buf = await fetchImageBuffer(avatarURL);
@@ -222,7 +271,6 @@ export async function renderQuoteImage({ message }) {
       ctx.drawImage(avatar, avatarX, avatarY, avatarSize, avatarSize);
       ctx.restore();
     } catch {
-      // fallback: just a circle
       ctx.fillStyle = "#1f2125";
       ctx.beginPath();
       ctx.arc(
@@ -236,28 +284,23 @@ export async function renderQuoteImage({ message }) {
     }
   }
 
-  // Username (role color if available)
   let nameColor = "#ffffff";
   const displayColor = member?.displayColor;
   if (typeof displayColor === "number" && displayColor !== 0) {
     nameColor = `#${displayColor.toString(16).padStart(6, "0")}`;
   }
 
-  // --- Header layout (clip username, fixed 6px gap before time) ---
   const nameTimeGap = 6;
   const headerRightPad = 20;
   const headerMaxX = W - headerRightPad;
 
-  // Timestamp text/width
   ctx.font = timeFont;
   ctx.fillStyle = "#b0b0b0";
   const timeText = " " + formatTimestamp(timestamp);
   const timeWidth = ctx.measureText(timeText).width;
 
-  // Compute max width allowed for username so time always fits
-  const maxNameWidth = (headerMaxX - nameX) - nameTimeGap - timeWidth;
+  const maxNameWidth = headerMaxX - nameX - nameTimeGap - timeWidth;
 
-  // Draw username clipped (no "...")
   ctx.save();
   ctx.beginPath();
   ctx.rect(
@@ -275,16 +318,13 @@ export async function renderQuoteImage({ message }) {
   ctx.fillText(username, nameX, nameY);
   ctx.restore();
 
-  // Draw timestamp after the reserved username region + gap
   ctx.font = timeFont;
   ctx.fillStyle = "#b0b0b0";
   const effectiveNameWidth = Math.min(nameWidth, maxNameWidth);
   const timeX = nameX + effectiveNameWidth + nameTimeGap;
 
   ctx.fillText(timeText, timeX, nameY);
-  // --- End header layout ---
 
-  // Message content
   ctx.font = messageFont;
   drawTokens(ctx, tokens, nameX, nameY + 26, maxTextWidth, lineHeight);
 
