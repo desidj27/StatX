@@ -23,11 +23,9 @@ export async function GET(request) {
     session.accessToken = token.access_token;
 
     const guilds = await fetchUserGuilds(token.access_token);
-    const adminGuilds = guilds
-      .filter(isGuildAdmin)
-      .map((g) => ({ id: g.id, name: g.name, icon: g.icon }));
-    session.adminGuilds = adminGuilds;
-    session.adminGuildIds = adminGuilds.map((g) => g.id);
+    // Only IDs in the cookie — full guild objects exceed browser cookie size (~4KB)
+    session.adminGuildIds = guilds.filter(isGuildAdmin).map((g) => g.id);
+    delete session.adminGuilds;
     session.isPlatformAdmin = isPlatformAdminUser(user.id);
 
     dest = session.postLoginRedirect ?? "/dashboard";

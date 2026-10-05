@@ -5,21 +5,18 @@ function toAdminGuildSummary(guild) {
   return { id: guild.id, name: guild.name, icon: guild.icon };
 }
 
-function persistAdminGuilds(session, adminGuilds) {
-  session.adminGuilds = adminGuilds;
+/** Cookie-safe: only store IDs (full guild lists blow past browser cookie limits). */
+function persistAdminGuildIds(session, adminGuilds) {
   session.adminGuildIds = adminGuilds.map((g) => g.id);
+  delete session.adminGuilds;
 }
 
 export async function getSessionGuilds(session, { persist = false } = {}) {
-  if (session.adminGuilds?.length) {
-    return session.adminGuilds;
-  }
-
   const guilds = await fetchUserGuilds(session.accessToken);
   const adminGuilds = guilds.filter(isGuildAdmin).map(toAdminGuildSummary);
 
   if (persist) {
-    persistAdminGuilds(session, adminGuilds);
+    persistAdminGuildIds(session, adminGuilds);
     await session.save();
   }
 
@@ -27,8 +24,7 @@ export async function getSessionGuilds(session, { persist = false } = {}) {
 }
 
 export function sessionHasGuildAdmin(session, guildId) {
-  if (session.adminGuildIds?.includes(guildId)) return true;
-  return session.adminGuilds?.some((g) => g.id === guildId) ?? false;
+  return session.adminGuildIds?.includes(guildId) ?? false;
 }
 
 export async function requireUser() {
@@ -43,7 +39,7 @@ export async function requireGuildAdmin(guildId) {
   const auth = await requireUser();
   if (auth.error) return auth;
 
-  let guild = auth.session.adminGuilds?.find((g) => g.id === guildId);
+  let guild = null;
 
   if (!sessionHasGuildAdmin(auth.session, guildId)) {
     try {
@@ -53,8 +49,14 @@ export async function requireGuildAdmin(guildId) {
       console.error("Guild auth error:", err);
       return { error: "relogin_required", status: 401 };
     }
-  } else if (!guild) {
-    guild = { id: guildId, name: "Server" };
+  } else {
+    // IDs-only session: resolve name/icon from Discord when needed
+    try {
+      const guilds = await getSessionGuilds(auth.session, { persist: false });
+      guild = guilds.find((g) => g.id === guildId) ?? { id: guildId, name: "Server" };
+    } catch {
+      guild = { id: guildId, name: "Server" };
+    }
   }
 
   if (!guild) {

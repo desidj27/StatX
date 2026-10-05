@@ -6,7 +6,7 @@ const AUTH_ERRORS = {
   oauth_failed: {
     title: "Login failed",
     description:
-      "Discord rejected the token exchange. Set DISCORD_CLIENT_SECRET in web/.env.local (Discord Developer Portal → OAuth2 → Client Secret), then restart the dev server.",
+      "Could not finish Discord sign-in. Try again. If it keeps failing, the Discord client secret or redirect URL may be wrong in Vercel env vars.",
   },
   missing_code: {
     title: "Login cancelled",
