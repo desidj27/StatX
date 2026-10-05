@@ -1,7 +1,4 @@
 import { createCanvas } from "@napi-rs/canvas";
-import gifenc from "gifenc";
-
-const { GIFEncoder, quantize, applyPalette } = gifenc;
 
 /** European single-zero wheel order (clockwise). */
 export const EUROPEAN_WHEEL = [
@@ -58,7 +55,6 @@ function drawWheel(ctx, cx, cy, radius, rotation) {
     ctx.restore();
   }
 
-  // Inner hub
   ctx.beginPath();
   ctx.arc(cx, cy, inner, 0, Math.PI * 2);
   ctx.fillStyle = "#2b2d31";
@@ -95,7 +91,6 @@ function drawPointer(ctx, cx, cy, radius) {
 
 function drawBall(ctx, cx, cy, radius, rotation, pocketIndex, progress) {
   const slice = (Math.PI * 2) / EUROPEAN_WHEEL.length;
-  // Ball rides near the rim, opposite spin feel early, settles into pocket.
   const settleAngle = rotation + pocketIndex * slice + slice / 2 - Math.PI / 2;
   const spinExtra = (1 - progress) * Math.PI * 4;
   const angle = settleAngle - spinExtra;
@@ -119,7 +114,6 @@ function drawFrame(size, rotation, pocketIndex, progress, revealLabel) {
   ctx.fillStyle = "#111318";
   ctx.fillRect(0, 0, size, size);
 
-  // Soft table ring
   const cx = size / 2;
   const cy = size / 2;
   const radius = size * 0.42;
@@ -142,28 +136,59 @@ function drawFrame(size, rotation, pocketIndex, progress, revealLabel) {
     ctx.fillText(revealLabel, cx, size * 0.78 + 21);
   }
 
-  return ctx.getImageData(0, 0, size, size);
+  return { canvas, imageData: ctx.getImageData(0, 0, size, size) };
+}
+
+async function loadGifenc() {
+  try {
+    const mod = await import("gifenc");
+    const gifenc = mod.default ?? mod;
+    return {
+      GIFEncoder: gifenc.GIFEncoder,
+      quantize: gifenc.quantize,
+      applyPalette: gifenc.applyPalette,
+    };
+  } catch (err) {
+    console.warn(
+      "[roulette] gifenc not installed — spinning GIF disabled. Add `gifenc` to Bisect Additional Node packages (or run npm install)."
+    );
+    return null;
+  }
+}
+
+/** Still PNG of the wheel stopped on `pocket` (fallback when gifenc is missing). */
+export function renderRouletteStillPng(pocket, { size = 360 } = {}) {
+  const pocketIndex = EUROPEAN_WHEEL.indexOf(pocket);
+  if (pocketIndex < 0) throw new Error(`invalid pocket: ${pocket}`);
+  const slice = (Math.PI * 2) / EUROPEAN_WHEEL.length;
+  const rotation = -(pocketIndex + 0.5) * slice;
+  const label = `${pocket} · ${pocket === 0 ? "green" : RED.has(pocket) ? "red" : "black"}`;
+  const { canvas } = drawFrame(size, rotation, pocketIndex, 1, label);
+  return canvas.toBuffer("image/png");
 }
 
 /**
  * Build an animated roulette GIF that eases out onto `pocket` (0–36).
- * @returns {Buffer}
+ * Returns null if gifenc is unavailable.
+ * @returns {Promise<Buffer|null>}
  */
-export function renderRouletteSpinGif(pocket, { size = 360, frames = 32 } = {}) {
+export async function renderRouletteSpinGif(pocket, { size = 360, frames = 32 } = {}) {
+  const gifenc = await loadGifenc();
+  if (!gifenc) return null;
+
+  const { GIFEncoder, quantize, applyPalette } = gifenc;
   const pocketIndex = EUROPEAN_WHEEL.indexOf(pocket);
   if (pocketIndex < 0) throw new Error(`invalid pocket: ${pocket}`);
 
   const slice = (Math.PI * 2) / EUROPEAN_WHEEL.length;
-  // Pocket center under the top pointer when rotation === finalRotation
   const finalRotation = -(pocketIndex + 0.5) * slice;
-  const spins = 4; // full turns before landing
+  const spins = 4;
   const startRotation = finalRotation - spins * Math.PI * 2;
 
   const holdFrames = 8;
   const totalFrames = frames + holdFrames;
 
-  // Sample first frame for a shared palette (flat colors → clean GIF)
-  const first = drawFrame(size, startRotation, pocketIndex, 0, null);
+  const first = drawFrame(size, startRotation, pocketIndex, 0, null).imageData;
   const palette = quantize(first.data, 64);
 
   const gif = GIFEncoder();
@@ -174,13 +199,15 @@ export function renderRouletteSpinGif(pocket, { size = 360, frames = 32 } = {}) 
     const rotation = startRotation + (finalRotation - startRotation) * eased;
     const progress = eased;
     const reveal =
-      i >= frames ? `${pocket} · ${pocket === 0 ? "green" : RED.has(pocket) ? "red" : "black"}` : null;
+      i >= frames
+        ? `${pocket} · ${pocket === 0 ? "green" : RED.has(pocket) ? "red" : "black"}`
+        : null;
 
-    const image = drawFrame(size, rotation, pocketIndex, progress, reveal);
+    const image = drawFrame(size, rotation, pocketIndex, progress, reveal).imageData;
     const index = applyPalette(image.data, palette);
     gif.writeFrame(index, size, size, {
       palette,
-      delay: i >= frames ? 12 : 4, // hold final pose longer
+      delay: i >= frames ? 12 : 4,
     });
   }
 

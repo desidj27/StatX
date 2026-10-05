@@ -178,10 +178,16 @@ export async function handleRoulette(interaction) {
 
   let files = [];
   try {
-    const gif = renderRouletteSpinGif(pocket);
-    files = [new AttachmentBuilder(gif, { name: "roulette.gif" })];
+    const gif = await renderRouletteSpinGif(pocket);
+    if (gif) {
+      files = [new AttachmentBuilder(gif, { name: "roulette.gif" })];
+    } else {
+      const { renderRouletteStillPng } = await import("./render_roulette.js");
+      const png = renderRouletteStillPng(pocket);
+      files = [new AttachmentBuilder(png, { name: "roulette.png" })];
+    }
   } catch (err) {
-    console.error("roulette gif render failed:", err);
+    console.error("roulette image render failed:", err);
   }
 
   const embed = new EmbedBuilder()
@@ -197,7 +203,8 @@ export async function handleRoulette(interaction) {
     );
 
   if (files.length) {
-    embed.setImage("attachment://roulette.gif");
+    const name = files[0].name;
+    embed.setImage(`attachment://${name}`);
   }
 
   await interaction.editReply({ embeds: [embed], files });
