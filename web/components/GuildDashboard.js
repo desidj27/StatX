@@ -15,6 +15,7 @@ import {
   TextField,
 } from "@heroui/react";
 import RankingsPanel from "@/components/RankingsPanel.js";
+import BillingPanel from "@/components/BillingPanel.js";
 
 function FeatureSwitch({ label, description, checked, onChange }) {
   return (
@@ -184,6 +185,8 @@ export default function GuildDashboard({ guildId, guildName }) {
         </Tabs.ListContainer>
 
         <Tabs.Panel id="settings" className="flex flex-col gap-6 pt-6">
+          <BillingPanel guildId={guildId} />
+
           <Card className="border border-border/60 p-4">
             <Card.Header>
               <Card.Title>Features</Card.Title>

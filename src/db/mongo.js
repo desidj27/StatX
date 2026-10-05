@@ -142,6 +142,10 @@ export const DB = (() => {
       db.collection("boost_events").createIndex({ guild_id: 1, boosted_at_ms: 1 }),
       db.collection("guild_settings").createIndex({ guild_id: 1 }, { unique: true }),
       db.collection("guild_subscriptions").createIndex({ guild_id: 1 }, { unique: true }),
+      db.collection("guild_subscriptions").createIndex(
+        { stripe_subscription_id: 1 },
+        { unique: true, sparse: true }
+      ),
       db.collection("activity_daily").createIndex(
         { guild_id: 1, user_id: 1, activity_name: 1, day: 1 },
         { unique: true }
@@ -916,6 +920,11 @@ export const DB = (() => {
     return (await col("guild_subscriptions")).findOne({ guild_id });
   }
 
+  async function getGuildSubscriptionByStripeSubscriptionId(stripe_subscription_id) {
+    if (!stripe_subscription_id) return null;
+    return (await col("guild_subscriptions")).findOne({ stripe_subscription_id });
+  }
+
   async function setGuildSubscription(guild_id, data) {
     await (
       await col("guild_subscriptions")
@@ -981,6 +990,7 @@ export const DB = (() => {
     ensureGuildSettings,
     updateGuildSettings,
     getGuildSubscription,
+    getGuildSubscriptionByStripeSubscriptionId,
     setGuildSubscription,
     listGuildSettingsIds,
     getDb,
