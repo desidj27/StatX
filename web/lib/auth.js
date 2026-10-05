@@ -25,9 +25,14 @@ async function loadAdminGuilds(accessToken) {
 export async function getSessionGuilds(session, { persist = false } = {}) {
   const adminGuilds = await loadAdminGuilds(session.accessToken);
 
-  if (persist) {
-    persistAdminGuildIds(session, adminGuilds);
-    await session.save();
+  if (persist && typeof session.save === "function") {
+    try {
+      persistAdminGuildIds(session, adminGuilds);
+      await session.save();
+    } catch (err) {
+      // Cookie writes are illegal in Server Components — never crash the page.
+      console.warn("skip session persist:", err?.message || err);
+    }
   }
 
   return adminGuilds;

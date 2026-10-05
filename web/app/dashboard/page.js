@@ -9,7 +9,9 @@ export default async function DashboardPage() {
   const session = await getSession();
   if (!session.user) redirect("/");
 
-  const adminGuilds = await getSessionGuilds(session, { persist: true });
+  // Never persist/save the session from a Server Component — Next.js only
+  // allows cookie writes in Route Handlers / Server Actions.
+  const adminGuilds = await getSessionGuilds(session, { persist: false });
 
   const presence = await Promise.all(
     adminGuilds.map(async (guild) => ({
