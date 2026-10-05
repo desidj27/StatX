@@ -1,17 +1,22 @@
-// roulette-gif-v3 — uses vendored encoder at ./vendor/gifenc.esm.js (NO npm gifenc package)
+// roulette-gif-v3 — vendored encoder (NO npm gifenc package)
 import { createCanvas } from "@napi-rs/canvas";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const VENDOR_GIFENC = path.join(__dirname, "vendor", "gifenc.esm.js");
+const VENDOR_CANDIDATES = [
+  path.join(__dirname, "vendor", "gifenc.esm.js"), // src/vendor/...
+  path.join(__dirname, "..", "vendor", "gifenc.esm.js"), // /vendor/... (Bisect mis-upload)
+];
 
-if (!fs.existsSync(VENDOR_GIFENC)) {
+const VENDOR_GIFENC = VENDOR_CANDIDATES.find((p) => fs.existsSync(p));
+if (!VENDOR_GIFENC) {
   throw new Error(
-    `[roulette] Missing vendored encoder at ${VENDOR_GIFENC}. Upload src/vendor/gifenc.esm.js from the StatX repo.`
+    `[roulette] Missing gifenc.esm.js. Expected one of:\n${VENDOR_CANDIDATES.join("\n")}`
   );
 }
+console.log(`[roulette] using encoder ${VENDOR_GIFENC}`);
 
 const { GIFEncoder, quantize, applyPalette } = await import(
   pathToFileURL(VENDOR_GIFENC).href
