@@ -20,9 +20,13 @@ export default async function HomePage({ searchParams }) {
             <a href="#pricing" className="text-muted hover:text-foreground">
               Pricing
             </a>
-            <a href="#login" className="text-accent hover:underline">
-              Login
-            </a>
+            {loginUrl ? (
+              <a href={loginUrl} className="text-accent hover:underline">
+                Login
+              </a>
+            ) : (
+              <span className="text-muted">Login</span>
+            )}
           </nav>
         </div>
       </header>
