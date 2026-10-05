@@ -221,20 +221,20 @@ function rpsWinner(a, b) {
   return 2;
 }
 
-function rpsPickRow(challengeId, userId) {
+function rpsPickRow(challengeId) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId(`rps:${challengeId}:pick:rock:${userId}`)
+      .setCustomId(`rps:${challengeId}:pick:rock`)
       .setLabel("Rock")
       .setEmoji("🪨")
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
-      .setCustomId(`rps:${challengeId}:pick:paper:${userId}`)
+      .setCustomId(`rps:${challengeId}:pick:paper`)
       .setLabel("Paper")
       .setEmoji("📄")
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
-      .setCustomId(`rps:${challengeId}:pick:scissors:${userId}`)
+      .setCustomId(`rps:${challengeId}:pick:scissors`)
       .setLabel("Scissors")
       .setEmoji("✂️")
       .setStyle(ButtonStyle.Secondary)
@@ -487,24 +487,13 @@ export async function handleRpsButton(interaction) {
 
     await interaction.update({
       embeds: [embed],
-      components: [
-        rpsPickRow(challengeId, challenge.challengerId),
-        rpsPickRow(challengeId, challenge.opponentId),
-      ],
+      components: [rpsPickRow(challengeId)],
     });
     return true;
   }
 
   if (action === "pick") {
     const pick = parts[3];
-    const forUser = parts[4];
-    if (interaction.user.id !== forUser) {
-      await interaction.reply({
-        content: "Those buttons aren't for you.",
-        flags: MessageFlags.Ephemeral,
-      });
-      return true;
-    }
     if (
       interaction.user.id !== challenge.challengerId &&
       interaction.user.id !== challenge.opponentId
